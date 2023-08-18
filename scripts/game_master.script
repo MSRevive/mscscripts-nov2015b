@@ -163,25 +163,6 @@
 		setvard GM_SERVER_EMPTY_PULSES 0
 	}
 
-	if ( !game.central )
-	{
-		if $lcase(game.cvar.hostname) contains [fn]
-		errormessage "Cannot use [FN] tag on non-FN server."
-	}
-
-	//set FN icon - FEB2009_13
-	if ( game.central ) //game.central
-	{
-		if ( !game.cvar.ms_central_online )
-		{
-			if ( !FN_WARNING )
-			{
-				setvard FN_WARNING 1
-				callevent fn_warning_loop
-			}
-		}
-	}
-
 	//scramble the global treasure lists ever few minutes to make them more "random"
 	add GM_SCRAMBLE_COUNT 1
 	if ( GM_SCRAMBLE_COUNT > $rand(2,5) )

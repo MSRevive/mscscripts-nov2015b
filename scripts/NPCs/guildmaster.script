@@ -28,14 +28,6 @@
 	callevent 0.1 check_central
 }
 
-{ check_central
-
-	if game.central equals 0
-	if !G_DEVELOPER_MODE
-	infomsg all FENRIN_FN_ONLY "You must be connected to [FN] to use the Guild Master"
-	deleteent ent_me
-}
-
 #include monsters/base_npc
 
 { repeatdelay 1

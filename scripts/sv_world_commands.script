@@ -1274,14 +1274,6 @@
 		consolemsg ent_currentplayer The Host's given contact is: ADMIN_CONTACT
 	}
 
-	//This was for Orochi's special build
-//	if ( PARAM1 equals 'icewave' )
-//	{
-//		if !game.central
-//		consolemsg ent_currentplayer Ice Wave Test
-//		createnpc monsters/summon/ice_wave_player $get(ent_currentplayer,origin) $get(ent_currentplayer,id) 0 3
-//	}
-
 	if ( PARAM1 equals 'ms_bloom_darken' )
 	{
 		if ( PARAM2 > -1 )
