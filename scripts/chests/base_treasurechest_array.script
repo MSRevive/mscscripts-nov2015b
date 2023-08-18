@@ -344,7 +344,7 @@
 	{
 		if $item_exists(CHEST_USER,item_gaxe_handle)
 		if !$item_exists(CHEST_USER,item_ore_lorel)
-		if $rand(1,2000) <= TC_NPLAYERS_X10
+		if $rand(1,100) <= 10
 		addstoreitem STORENAME item_ore_lorel 1 0		
 	}
 

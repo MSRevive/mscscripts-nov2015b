@@ -19,7 +19,7 @@
 
 	const COMMON_COUNT_PPLAYER 0.5
 
-	const ORE_CHANCE 2000
+	const ORE_CHANCE 100
 
 	const ANIM_IDLE idle
 	const ANIM_CLOSE close
