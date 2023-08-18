@@ -1,0 +1,586 @@
+#scope server
+
+//%%Current issues:
+//- male warrior model has no dbl bow
+//- gonna need to export and grab hitboxes, since we're scaling x40 (maybe, test)
+//- doesn't seem to be initiating name proper (Prefix is wrong)
+//- need to remember how to pass params via createdyn
+//-- dunno what it was, but added, test: . createdyn 0 events es_rnd
+
+
+//replacement, more mobile elf warriors, in both sexes
+
+//(gender) pick one:
+//es_female - XX (default)
+//es_male - XY
+
+//(weapon) pick one:
+//es_wp;0 - Switches dynamically between sword(s), conventional bow, and unarmed attacks (default)
+//es_wp;1 - Uses double bow and unarmed attacks only
+//es_wp;2 - Uses spiral bow and unarmed attacks only
+//es_wp;3 - Uses conventional bow and unarmed attacks only
+//es_wp;4 - Uses sword only
+//es_wp;5 - Uses bows and blades only
+//es_wp;6 - Uses unarmed attacks only (kick, sweep, punch)
+
+//(type) pick one:
+//es_typ;0 - Elven (Default)
+//es_typ;1 - Torkalath (Ramatta)
+//es_typ;2 - Eshu
+//es_typ;3 - Seeker
+//es_typ;4 - Djinn
+//- Affects default race, but set_race overrides <0=human;1=torkie;2=human;3=human;4=demon>
+//- Affects default skin, but set_skin overrides
+//- Affects name prefix, but custom name overrides
+
+//(element) [optiona] pick one:
+//es_elm;0 - none (default)
+//es_elm;1 - natural (binding thorns and venom)
+//es_elm;2 - fire
+//es_elm;3 - cold
+//es_elm;4 - dark (can cloak)
+//es_elm;5 - shock (can teleport)
+//es_elm;6 - chaos (es_wp must be bow only (1-4), otherwise error
+//es_elm;7 - holy (race must be human)
+//- Spiral Bow weilders with no element set do "magic" damage with a white spiral
+//- Affects default skin, but set_skin overrides
+//- Affects name suffix, but custom name overrides
+
+//(aura) [optional] pick one: 
+//es_aur;0 - none (default)
+//es_aur;1 - by es_elm setting (if 1-5)
+//es_aur;2 - venom
+//es_aur;3 - fire
+//es_aur;4 - cold
+//es_aur;5 - dark (reduces victim's damage)
+//es_aur;6 - shock (repells)
+
+//other optional:
+
+//set_race;<any>
+//- typically: torkie;hguard;human;necro;demon (defaults human)
+
+//set_follower (human race only - makes battle ally)
+
+//set_leader (human race only - makes battle ally)
+
+//set_skin;<#>
+//male skins 
+//0 - Felewyn Gold (default)
+//1 - Ramatta Elite Black
+//2 - Eshu Elite
+//3 - Ramatta Necro
+//4 - Felewyn Silver
+//5 - Felewyn Assasin
+//6 - Eshu Duskknight
+//7 - Felewyn Crimson Guard
+//8 - Ramatta Firebrand
+//9 - Ramatta Footsoldier
+//10 - Ice Djinn
+//11 - Orc Blood
+//12 - Ramatta Firebrand Elite
+//13 - Ramatta Elite
+//14 - Fire Djinn
+//15 - Fire Djinn Elite
+//16 - Fire Djinn Elite 2
+
+//female skins
+//0 - Eshu Soldier (default)
+//1 - Felewyn Gold
+//2 - Ramatta Soldier (friendly)
+//3 - Eshu Elite
+//4 - Eshu Nightblade
+//5 - Tan
+//6 - Natural
+//7 - Ramatta Elite
+//8 - Ramatta Assasin
+//9 - Eshu Assasin
+//10 - Ramatta Shadowmancer
+//11 - Ramatta Elite
+//12 - Fire Djinn
+//13 - Fire Djinn Elite
+
+{
+	//try to hide until we're finalized
+	setprop ent_me rendermode 5
+	setprop ent_me renderamt 0
+
+	const ADDITIONAL_CONFIG none //treats as additional addparams at spawn
+
+	setvard AM_ELF_WARRIOR 1 //tells other elf warriors I am one of them for unit management
+
+	const ALLY_NO_INIT 1
+
+	//build options and defaults
+	setvar ELF_ELM_TYPE none //es_elm
+	setvar ELF_ELM_IDX 0
+	const ELF_ELM_LIST "none;nat;fire;cold;dark;shock;chaos;holy"
+
+	setvar ELF_WEP_TYPE dyn //es_wp
+	setvar ELF_WEP_IDX 0
+	const ELF_WEP_LIST "dyn;dbow;sbow;bow;sw;bs;ma"
+
+	setvar ELF_PREFIX_IDX 0
+	setvar ELF_PREFIX Elven
+	const ELF_PREFIX_LIST "Elven;Torkalath;Eshu;Seeker;Djinn"
+	const ELF_RACE_LIST "human;torkie;human;human;demon"
+
+	setvard T_ERROR '' //configuration error report string (init just in case)
+
+	setvar ELF_SEX female
+
+
+	setvar ANIM_IDLE anim_idle1 
+	setvar ANIM_WALK anim_walk //frame_walk_start frame_walk_done
+	setvar ANIM_RUN anim_run //frame_walk_start frame_walk_done
+
+	const ANIM_IDLE1 anim_idle1 //frame_idle1_done
+	const ANIM_IDLE2 anim_idle2 //frame_idle2_done
+	const ANIM_IDLE2 anim_idle3 //frame_idle3_done //females only
+
+
+	//try to rig it so elves can't turn while in jump, but will restore turning ability at end or after a delay (should anim be interrupted)
+	//also no flinching while in air from jump or jump attack
+	const ANIM_JUMP_RUN anim_jump_run //{ { event 500 1 "frame_jump_start" } { event 500 17 "frame_jump_top" } { event 500 34 "frame_jump_done" } }
+	const ANIM_SLIDE anim_slide-stop //{ { event 500 1 "frame_slide_start" } { event 500 39 "frame_slide_done" } }
+	const ANIM_DODGE anim_jump_inplace //{ { event 500 1 "frame_dodge_start" } { event 500 34 "frame_dodge_done" } }
+
+	const ANIM_UNARMED_IDLE anim_idle_combat
+	const ANIM_KICK_SPIN anim_action1 //{ { event 500 1 "frame_spinkick_start" } { event 500 11 "frame_spinkick_strike" } { event 500 39 "frame_spinkick_done" } }
+	const ANIM_KICK_PUSH anim_action2 //{ { event 500 1 "frame_pushkick_start" } { event 500 18 "frame_pushkick_strike" } { event 500 39 "frame_pushkick_done" } }
+	const ANIM_PUNCH anim_action3 //{ { event 500 1 "frame_punch_start" } { event 500 16 "frame_punch_strike" } { event 500 29 "frame_punch_done" } }
+
+	const ANIM_BOW_DRAW anim_bow_draw //frame_bowdraw_done
+	const ANIM_BOW_IDLE anim_idle_bow
+	const ANIM_BOW_NSHOT anim_bow_action1 //{ { event 500 1 "frame_nshot_start" } { event 500 7 "frame_nshot_showarrow" } { event 500 18 "frame_nshot_pull" } { event 500 35 "frame_nshot_strike" } { event 500 49 "frame_nshot_end" } }
+	const ANIM_BOW_QSHOT anim_bow_action2 //{ { event 500 1 "frame_qshot_start" } { event 500 6 "frame_qshot_showarrow" } { event 500 17 "frame_qshot_pull" } { event 500 26 "frame_qshot_strike" } { event 500 34 "frame_qshot_end" } }
+	const ANIM_BOW_SHEATH anim_bow_sheath //frame_sheath_done
+
+	//male/females handle swords a bit different
+	const ANIM_SWORD_DRAW anim_sword_draw //frame_sworddraw_sound frame_sworddraw_done
+	const ANIM_SWORD_IDLE anim_sword_idle
+	const ANIM_SWORD_ACT1 anim_sword_act1	//female: (double rolling slash)  { { event 500 1 "frame_sworddbl_start" } { event 500 11 "frame_sworddbl_strike1" } { event 500 18 "frame_sworddbl_strike2" } { event 500 29 "frame_sworddbl_done" } }
+											//male: (single sweep) { { event 500 1 "frame_mswslash_start" } { event 500 10 "frame_mswslash_strike" } { event 500 29 "frame_mswslash_done" } }
+	const ANIM_SWORD_ACT2 anim_sword_act2	//female: (swing both swords down) { { event 500 1 "frame_dqground_start" } { event 500 25 "frame_dqground_strike" } { event 500 49 "frame_dqground_done" } }
+											//male: (overhead slam) { { event 500 1 "frame_mswslam_start" } { event 500 30 "frame_mswslam_strike" } { event 500 49 "frame_mswslam_done" } }
+	const ANIM_SWORD_ACT3 anim_sword_act3	//female: (long pierce, single targ) { { event 500 1 "frame_swpierce_start" } { event 500 17 "frame_swpierce_strike" } { event 500 39 "frame_swpierce_done" } }
+											//male: (spin - dbl aoe burst) { { event 500 1 "frame_mswspin_start" } { event 500 15 "frame_mswspin_strike1" } { event 500 25 "frame_mswspin_strike2" } { event 500 39 "frame_mswspin_done" } }
+	const ANIM_SWORD_ACT3 anim_sword_act3_tl	//(males only) - faster spinning strike - to be adapted into a continous spin multi-attack for bosses
+	const ANIM_SWORD_ACT4 anim_sword_act4	//female: (mighty leap attack) { { event 500 1 "frame_swleaps_start" } { event 500 7 "frame_swleaps_air" } { event 500 41 "frame_swleaps_strike" } { event 500 64 "frame_swleaps_done" } }
+											//male: (mighty leap attack) { { event 500 1 "frame_mswj_start" } { event 500 10 "frame_mswj_air" } { event 500 40 "frame_mswj_strike" } { event 500 64 "frame_mswj_done" } }
+											//^ elemental highlight at frame_swleap_air followed by line, cone, or AOE of destruction at frame_swleap_strike
+	const ANIM_SWORD_SHEATH anim_sword_sheath //frame_sheath_sound frame_sheath_done (male frame events maybe outta sync)
+	
+	const ANIM_FLINCH1 anim_hit1 //frame_flinch_done
+	const ANIM_FLINCH2 anim_hit2 //frame_flinch_done
+
+	const ANIM_DEATH1 anim_death_1
+	const ANIM_DEATH1 anim_death_2
+	setvard ANIM_DEATH ANIM_DEATH1 //select at game_death
+}
+
+{ game_precache
+	precache monsters/elf_female_warrior.mdl
+	precache monsters/elf_male_warrior.mdl
+}
+
+#include monsters/base_battle_ally
+#include monsters/base_monster_new
+#include monsters/base_struck
+
+{ npc_spawn
+	callevent elf_spawn
+}
+
+{ elf_spawn
+	setmodel monsters/elf_female_warrior.mdl
+	width 32
+	height 96
+
+	callevent 1.5 elf_finalize
+}
+
+{ elf_finalize
+
+	dbg elf_finalize
+
+	if ( ELF_RANDOMIZE ) callevent elf_random
+
+	if ( ELF_SEX equals male )
+	{
+		setmodel monsters/elf_male_warrior.mdl
+		width 32
+		height 96
+	}
+
+	callevent elf_get_name //name only applies if !NPC_CUSTOM_NAME, but we get other defaults here
+	if ( !NPC_CUSTOM_NAME )
+	{
+		if ( aeiou contains $lcase($left(ELF_NAME,1) ) name_prefix an
+		else name_prefix a
+		name ELF_NAME
+	}
+	if ( !NPC_CUSTOM_RACE ) callevent elf_get_race
+	if ( !NPC_CUSTOM_SKIN )
+	{
+		callevent elf_get_skin
+		setprop ent_me skin ELF_SKIN
+	}
+
+	if ( ELF_BATTLE_ALLY )
+	{
+		if $get(ent_me,race) isnot human
+		setvard ELF_FATAL_CONFIG_ERROR 1
+		stradd T_ERROR "Non-player faction battle ally - "
+	}
+
+	if ( ELF_ELM_TYPE equals holy )
+	{
+		if $get(ent_me,race) isnot human
+		setvard ELF_FATAL_CONFIG_ERROR 1
+		stradd T_ERROR "Non-player faction set holy - "
+	}
+
+	callevent elf_get_weapons
+
+	roam 0 //%% remove
+
+	setprop ent_me rendermode 0
+	setprop ent_me renderamt 255
+
+	if ELF_FATAL_CONFIG_ERROR
+	local OUT_MSG T_ERROR
+	stradd OUT_MSG " @ "
+	stradd OUT_MSG $get(ent_me,origin)
+	infomsg all "INVALID ELF WARRIOR CONFIG" OUT_MSG
+	callevent 1.0 npc_suicide
+}
+
+{ elf_get_name
+
+	dbg elf_get_name
+
+	if ( ELF_WEP_TYPE equals dyn )
+	{
+		if ( ELF_SEX equals male )
+		{
+			setvard NAME_SUFFIX "Warrior;Druid;Pyron;Glacier;Corrupter;Storm;ERROR;Knight"
+		}
+		else
+		{
+			setvard NAME_SUFFIX "Warrior;Druid;Flamemistress;Icicle;Shadow;Storm;ERROR;Battlemaiden"
+		}
+	}
+	else if ( ELF_WEP_TYPE equals dbow )
+	{
+		if ( ELF_SEX equals male )
+		{
+			setvard NAME_SUFFIX "Elite Archer;Needler;Firestorm;Frozenbow;Shadowarcher;Stormbow;Chaos Arrow;Holy Arrow"
+		}
+		else
+		{
+			setvard NAME_SUFFIX "Twin Sniper;Needler;Firestorm;Frozenbow;Shadowarcher;Stormbow;Chaos Arrow;Bowmaiden"
+		}
+	}
+	else if ( ELF_WEP_TYPE equals sbow )
+	{
+		//if set "none" spiral bow does "magic" damage, white effect
+		//%% add venom and holy spiral projectiles
+		if ( ELF_SEX equals male )
+		{
+			setvard NAME_SUFFIX "Arcane Bowman;Venom Spiral;Flame Spiral;Ice Spiral;Dark Spiral;Thunderstorm;Arcane Archer;Undead Scourge"
+		}
+		else
+		{
+			setvard NAME_SUFFIX "Arcane Bowmaiden;Venom Spiral;Flame Spiral;Ice Spiral;Dark Spiral;Thunderstorm;Arcane Archer;Divine Bowmaiden"
+		}
+	}
+	else if ( ELF_WEP_TYPE equals bow )
+	{
+		if ( ELF_SEX equals male )
+		{
+			setvard NAME_SUFFIX "Bowman;Ranger;Flamebow;Icebow;Shadowarcher;Thunderbolt;Arcane Bowman;Divine Ranger"
+		}
+		else
+		{
+			setvard NAME_SUFFIX "Huntress;Huntress;Flamebow;Icebow;Shadowarcher;Thunderbolt;Arcane Bowmaiden;Divine Archer"
+		}
+	}
+	else if ( ELF_WEP_TYPE equals sw )
+	{
+		if ( ELF_SEX equals male )
+		{
+			setvard NAME_SUFFIX "Swordsman;Blade;Firebrand;Iceblade;Shadowblade;Thunderblade;ERROR;holy"
+		}
+		else
+		{
+			setvard NAME_SUFFIX "Assassin;Thorn;Fireknife;Iceknife;Shadowblade;Lightning Dagger;ERROR;holy"
+		}
+	}
+	else if ( ELF_WEP_TYPE equals bs )
+	{
+		if ( ELF_SEX equals male )
+		{
+			setvard NAME_SUFFIX "Soldier;Brambletree;Torch;Icehand;Scourge;Thunder;ERROR;Diviner"
+		}
+		else
+		{
+			setvard NAME_SUFFIX "Soldier;Brambletree;Torch;Iceheart;Diabolic;Lightning;ERROR;Diviner"
+		}
+	}
+	else if ( ELF_WEP_TYPE equals ma )
+	{
+		if ( ELF_SEX equals male )
+		{
+			setvard NAME_SUFFIX "Martial;Barbarian;Inferno;Glacial Fist;Shadowfist;Shocker;ERROR;Monk"
+		}
+		else
+		{
+			setvard NAME_SUFFIX "Martial;Bristle;Inferno;Frostfoot;Shadowfoot;Shocker;ERROR;Priestess"
+		}
+	}
+
+	setvard NAME_SUFFIX $get_token(NAME_SUFFIX,ELF_ELM_IDX)
+	setvard ELF_NAME ELF_TYPE
+	stradd ELF_NAME ' '
+	stradd ELF_NAME NAME_SUFFIX
+}
+
+{ elf_get_skin
+	dbg elf_get_skin
+	if ( ELF_PREFIX_IDX == 0 ) //Elven
+	{
+		if ( ELF_SEX equals male )
+		{
+			setvard ELF_SKIN_ELM "4;2;7;6;5;0;12;0"
+		}
+		else
+		{
+			setvard ELF_SKIN_ELM "6;0;2;4;5;3;9;1"
+		}
+	}
+	else if ( ELF_PREFIX_IDX == 1 ) //Torkie
+	{
+		if ( ELF_SEX equals male )
+		{
+			setvard ELF_SKIN_ELM "9;11;1;10;3;5;12;13"
+		}
+		else
+		{
+			setvard ELF_SKIN_ELM "2;9;11;10;8;7;11;2"
+		}
+	}
+	else if ( ELF_PREFIX_IDX == 2 ) //Eshu
+	{
+		if ( ELF_SEX equals male )
+		{
+			setvard ELF_SKIN_ELM "2;2;8;10;12;5;12;9"
+		}
+		else
+		{
+			setvard ELF_SKIN_ELM "0;0;11;4;10;3;9;9"
+		}
+	}
+	else if ( ELF_PREFIX_IDX == 3 ) //Seeker
+	{
+		if ( ELF_SEX equals male )
+		{
+			setvard ELF_SKIN_ELM "0;4;7;6;4;4;7;0"
+		}
+		else
+		{
+			setvard ELF_SKIN_ELM "1;6;2;4;7;1;1;1"
+		}
+	}
+
+	setvard ELF_SKIN $get_token(ELF_SKIN_ELM,ELF_ELM_IDX)
+}
+
+{ elf_get_weapons
+	dbg elf_get_weapons
+	if ( ELF_SEX equals female )
+	{
+		if ( ELF_WEP_IDX == 0 )
+		{
+			setmodelbody 2 5
+		}
+		else if ( ELF_WEP_IDX == 1 )
+		{
+			setmodelbody 2 6
+		}
+		else if ( ELF_WEP_IDX == 2 )
+		{
+			setmodelbody 2 6
+		}
+		else if ( ELF_WEP_IDX == 3 )
+		{
+			setmodelbody 2 1
+		}
+		else if ( ELF_WEP_IDX == 4 )
+		{
+			setmodelbody 2 4
+		}
+		else if ( ELF_WEP_IDX == 5 )
+		{
+			setmodelbody 2 5
+		}
+		else if ( ELF_WEP_IDX == 6 )
+		{
+			setmodelbody 2 0
+		}
+	}
+
+	if ( ELF_SEX equals male ) //%% male model needs dblbow
+	{
+		if ( ELF_WEP_IDX == 0 )
+		{
+			setmodelbody 1 0
+		}
+		else if ( ELF_WEP_IDX == 1 )
+		{
+			setmodelbody 1 4
+		}
+		else if ( ELF_WEP_IDX == 2 )
+		{
+			setmodelbody 1 4
+		}
+		else if ( ELF_WEP_IDX == 3 )
+		{
+			setmodelbody 1 2
+		}
+		else if ( ELF_WEP_IDX == 4 )
+		{
+			setmodelbody 1 1
+		}
+		else if ( ELF_WEP_IDX == 5 )
+		{
+			setmodelbody 1 0
+		}
+		else if ( ELF_WEP_IDX == 6 )
+		{
+			setmodelbody 1 3
+		}
+	}
+}
+
+{ elf_random
+	dbg elf_random
+	if ( !ELF_SEX_SET )
+	{
+		if ( $rand(1,2) == 1 ) callevent es_female
+		else callevent es_male
+	}
+
+	if ( !ELF_WEP_SET )
+	{
+		callevent es_wp $rand(0,$math(subtract,$get_token_amt(ELF_WEP_LIST),1)
+	}
+
+	if ( !ELF_ELM_SET )
+	{
+		local L_ELM $rand(0,$math(subtract,$get_token_amt(ELF_ELM_LIST),1)
+
+		if ( $get_token(ELF_ELM_LIST,L_ELM) equals chaos )
+		{
+			if !$inrange(ELF_WEP_IDX,1,4)
+			local L_INVALID 1
+		}
+
+		if ( $get_token(ELF_ELM_LIST,L_ELM) equals holy )
+		{
+			if ( ELF_PREFIX_IDX = 1 ) local L_INVALID 1
+			if ( ELF_PREFIX_IDX = 4 ) local L_INVALID 1
+		}
+
+		if ( L_INVALID ) local L_ELM 0 //this will cause it to favor normals, but meh
+		callevent es_elm L_ELM
+	}
+
+	if ( !ELF_AURA_SET )
+	{
+		if $inrange(ELF_ELM_IDX,1,5)
+		if $rand(1,2) == 1
+		callevent es_aur 1 //always uses associated element - only reason to override is for special bosses
+	}
+}
+
+//==================================================== Additional Parameters
+
+{ es_female
+	dbg es_female
+	setvard ELF_SEX female
+	setvard MONSTER_MODEL monsters/elf_female_warrior.mdl
+	setvard ELF_SEX_SET 1
+}
+
+{ es_male
+	dbg es_male
+	setvard ELF_SEX male
+	setvard ELF_SEX monsters/elf_male_warrior.mdl
+	setvard ELF_SEX_SET 1
+}
+
+{ es_wp
+	if PARAM1 !startswith PARAM
+	setvard ELF_WEP_IDX PARAM1
+	setvard ELF_WEP_TYPE $get_token(ELF_WEP_LIST,ELF_WEP_IDX)
+	dbg es_wp ELF_WEP_TYPE
+	setvard ELF_WEP_SET 1
+	if !$inrange(PARAM1,0,6)
+	setvard ELF_FATAL_CONFIG_ERROR 1
+	stradd T_ERROR 'es_wp out of range (0-6)'
+}
+
+{ es_elm
+	if PARAM1 !startswith PARAM
+	setvard ELF_ELM_IDX PARAM1
+	setvard ELF_ELM_TYPE $get_token(ELF_ELM_LIST,ELF_ELM_IDX)
+	setvard ELF_ELM_SET 1
+	dbg es_elm ELF_ELM_TYPE
+	if !$inrange(PARAM1,0,7)
+	setvard ELF_FATAL_CONFIG_ERROR 1
+	stradd T_ERROR 'es_elm out of range (0-7) - '
+}
+
+{ es_aur
+	dbg es_aur PARAM1
+	if PARAM1 !startswith PARAM
+	setvard ELF_HAS_AURA 1
+	setvard ELF_AURA_IDX PARAM1
+	setvard ELF_AURA_SET 1
+	if !$inrange(PARAM1,0,6)
+	setvard ELF_FATAL_CONFIG_ERROR 1
+	stradd T_ERROR 'es_aur out of range (0-6) - '
+}
+
+{ es_typ
+	dbg es_typ
+	if PARAM1 !startswith PARAM
+	setvard ELF_PREFIX_IDX PARAM1
+	setvard ELF_TYPE_SET 1
+	setvard ELF_TYPE $get_token(ELF_TYPE_LIST,ELF_PREFIX_IDX)
+	dbg es_typ ELF_TYPE
+	if !$inrange(PARAM1,0,4)
+	setvard ELF_FATAL_CONFIG_ERROR 1
+	stradd T_ERROR 'es_typ out of range (0-4) - '
+}
+
+{ es_rnd //randomizes any unset config options (except es_typ)
+	dbg es_rnd
+	//do not advertise this, for testing - want people to think about configs:
+	setvard ELF_RANDOMIZE 1 //tells script to pick a random type among available on finalize
+}
+
+{ set_follower
+	setvard ELF_BATTLE_ALLY 1
+	callevent ally_setup //base_battle_ally
+}
+
+{ set_leader
+	setvard ELF_BATTLE_ALLY 1
+	callevent ally_setup //base_battle_ally
+}
+
+{ game_dynamically_created
+	dbg game_dynamically_created PARAM1 PARAM2 PARAM3 PARAM4
+}

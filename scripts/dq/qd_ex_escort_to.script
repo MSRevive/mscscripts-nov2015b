@@ -1,0 +1,30 @@
+//Dwarf Quest Example Template: Fetch Item quest
+
+{ quest_info
+	//If QUEST_TYPE is "fetch_items"
+	//- fetch item or items placed randomly throughout the map
+	//- QUEST_DATA1 <targetname_prefix> or <series of (vecs)>
+	//- QUEST_DATA2 "<qitem_code>;[qitem_name]"
+	//- QUEST_DATA3 <0|1> - spawn one item at available random locations, rather than one item at each location
+	//- if target name is used, assumes a series of info_target's named, for instance: fetch_item1 fetch_item2 fetch_item3
+	//- other/qitem will be spawned at this location. Item name name will be changed from the default qitem code if second token is provided in QUEST_DATA2.
+	//- Quest completes when all items are collected and returned.
+	const QUEST_TYPE fetch_items
+	const QUEST_DATA1 quest_weed
+	const QUEST_DATA2 "gen1;a|Bag of Weed"
+	//QUEST_DATA3 is not needed, as we're hunting for multiple bags of weed
+}
+
+//This references the base script I'll write up:
+#include dq/quest_dwarf
+
+{ quest_intro
+   callevent chat_now "Hey dude, I lost my weed."
+   callevent chat_now "Bring me muh weed and I'll gibbya stuffs."
+}
+
+{ quest_complete
+   callevent chat_now "Thanks man!"
+   callevent chat_now "Wanna hit bro?"
+   callevent chat_now "Es kewl... Meh, I'm out."
+}

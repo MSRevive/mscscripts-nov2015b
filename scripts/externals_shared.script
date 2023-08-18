@@ -1,0 +1,72 @@
+#scope server
+#include [server] elemental_resist
+
+//We'll eventually be moving all externals shared by both mobs and players here
+
+{ func_subst //<string> <search_string> <replace_with>
+	//$subst is crashing here, so using this hack until we fix it
+	//sadly this can't handle multiple replace instances, but it works
+	local L_STRING PARAM1
+	local L_SEARCH PARAM2
+	local L_REPLACE PARAM3
+
+	local L_STRING1 $string_upto(L_STRING,L_SEARCH)
+	local L_STRING2 $string_from(L_STRING,L_SEARCH)
+
+	stradd L_STRING1 L_REPLACE
+
+	local L_STRING_OUT L_STRING1
+	stradd L_STRING_OUT L_STRING2
+
+	return L_STRING_OUT
+}
+
+
+{ ext_repel //<target> <origin> <strength> [vboost] [maxhp] [override:0|1]
+	//we're just doing this far too often, centralizing it in externals
+	//this should be in externals_shared
+	local L_TARG PARAM1
+	local L_TARG_ORG $get(PARAM1,origin)
+	local L_ORG PARAM2
+	local L_PUSHVEL PARAM3
+	local L_VPUSHVEL PARAM4
+	local L_MAXHP PARAM5
+	local L_OVERRIDE PARAM6
+
+	dbg ext_repel vel L_PUSHVEL max L_MAXHP vs. $get(L_TARG,hp) [ $get(L_TARG,name) ]
+
+	if ( L_MAXHP > 0 )
+	{
+		local L_TARG_HP $get(L_TARG,hp)
+		if ( L_TARG_HP > L_MAXHP ) exitevent //too strong to push
+		//decrease push if targ hp > 50% of max push hp
+		if L_TARG_HP > $math(multiply,L_MAXHP,0.5) 
+		local L_RATIO 1
+		subtract L_RATIO $math(divide,L_TARG_HP,L_MAXHP)
+		multiply L_PUSHVEL L_RATIO
+		//dbg ext_repel reduced rat L_RATIO fpush L_PUSHVEL
+	}
+
+	dbg ext_repel fvel L_PUSHVEL
+
+	local L_NEW_ANG $angles(L_ORG,L_TARG_ORG)
+
+	if ( L_OVERRIDE )
+	{
+		addvelocity L_TARG $relvel($vec(0,L_NEW_ANG,0),$vec(0,L_PUSHVEL,L_VPUSHVEL)) override
+	}
+	else
+	{
+		addvelocity L_TARG $relvel($vec(0,L_NEW_ANG,0),$vec(0,L_PUSHVEL,L_VPUSHVEL))
+	}
+}
+
+{ ext_showflags
+	dbg Showflags:
+	local L_TEST $get_scriptflag(ent_me,listall)
+}
+
+//For testing
+//{ ext_bleed_test
+//	clientevent new all effects/sfx_bleed_test_cl $get(ent_me,index)
+//}

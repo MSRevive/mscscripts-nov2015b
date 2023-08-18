@@ -1,0 +1,42 @@
+{
+	setvard GLOW_RAD 64
+	setvard GLOW_COLOR (128,128,0)
+
+	const GLOW_RAD_DEFAULT 64
+}
+
+{ client_activate //<owner_idx>
+	setvard FX_OWNER PARAM1
+	callevent 5.0 remove_fx
+	setcallback render enable
+	callevent glow_low
+	
+	cleffect light new $getcl(FX_OWNER,origin) GLOW_RAD GLOW_COLOR 0.1
+	setvard SKEL_LIGHT_ID game.script.last_light_id
+}
+
+{ game_prerender
+
+	if $getcl(FX_OWNER,exists)
+	local L_POS $getcl(FX_OWNER,origin)
+	if ( GLOW_RAD > GLOW_RAD_DEFAULT ) subtract GLOW_RAD 1
+	if ( GLOW_RAD == GLOW_RAD_DEFAULT ) setvard GLOW_COLOR (128,128,0)
+	cleffect light SKEL_LIGHT_ID L_POS GLOW_RAD GLOW_COLOR 0.1
+}
+
+{ remove_fx
+	removescript
+}
+
+{ do_alert //<pulse_heavy>|<pulse_light> from owner
+	if ( PARAM1 equals pulse_heavy )
+	{
+		setvard GLOW_RAD 512
+		setvard GLOW_COLOR (255,255,255)
+	}
+	else
+	{
+		setvard GLOW_RAD 128
+		setvard GLOW_COLOR (255,255,0)
+	}
+}

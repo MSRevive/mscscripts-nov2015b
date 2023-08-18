@@ -1,0 +1,392 @@
+//This helpful little sprite will help players track down certain monster types
+
+//finds mob by name or partial name
+//invulnerable, no clip
+//when finds target, blinks light and makes noise (inc atten), so long as target has no NPCATK_TARGET set
+//if spawned on map, attaches to nearest player
+//spawned by creation sets initial attach player
+//if player disconnects (ceases to exist) aborts hunting, and finds new player, then resumes
+//if target mob remains dossile for 20 seconds (presumably not found), returns to host player and finds new target
+//effect is glow sprite and follow beam fx, refresh 5/secs (as will cancel when passes through walls)
+//passive looping sound and glow for easier tracking
+//registers with game master so it knows when quest complete trigger fired, then deletes
+//Also removes on global event seeker_remove
+
+//Tried to make a solid one based on grav flier that didn't go through walls, but just gets stuck like mad.
+
+//. createnpc monsters/summon/monster_finder ME orc orcs
+//. tele 890 -621 36
+
+#scope server
+
+{
+	const HOST_ORBIT_RANGE 32
+
+	const SOUND_LOOP ambience/alien_cycletone.wav
+	const SOUND_PING magic/cast_8bit.wav
+	setvard NPCATK_TARGET unset
+}
+
+
+{ fake_precache
+	svplaysound 0 0 SOUND_LOOP
+}
+
+#include monsters/base_propelled
+
+{ game_spawn
+	name a|Seeker
+	race beloved
+	height 32
+	width 32
+	setmodel weapons/projectiles.mdl
+	setmodelbody 0 13 //-22
+	setidleanim spin_horizontal_slow
+	setsolid none
+	gravity 0
+	fly 1
+	setbbox none
+	setvard PLAYING_DEAD 1
+	invincible 1
+	nopush 1 //might be nice if apply/setvelocity called an event, so we could let it be pushed, and scream - and mobs could target pushers who do no damage
+
+	setprop ent_me movetype 8 //noclip
+
+	callevent client_refresh_loop
+	setvard INTRO_END game.time
+	add INTRO_END 3.0
+	callevent hunt_cycle
+}
+
+{ game_dynamically_created //<user> <search_string> <proper_name> [finish_trigger]
+	setvard WAS_SUMMONED 1
+	setvard CUR_USER PARAM1
+	setvard SEARCH_STRING PARAM2
+	setvard SEARCH_TITLE PARAM3
+	setvard FINISH_TRIGGER PARAM4
+}
+
+{ game_postspawn //PARAM1 = (name|default), PARAM2 = DmgMulti, PARAM3 = HPMulti, PARAM4 = params string
+	//addparam: <search_string(lower case)> <proper_name> [finished_trigger]
+	if !WAS_SUMMONED
+	setvard SEARCH_STRING $get_token(PARAM4,0)
+	setvard SEARCH_TITLE $get_token(PARAM4,1)
+	setvard FINISH_TRIGGER $get_token(PARAM4,2)
+}
+
+{ client_refresh_loop
+	if $get(ent_me,isalive)
+	callevent 5.0 client_refresh_loop
+	if ( CL_IDX isnot 'CL_IDX' )
+	{
+		clientevent update all CL_IDX remove_fx
+	}
+	clientevent new all monsters/summon/monster_finder_cl $get(ent_me,index)
+	setvard CL_IDX game.script.last_sent_id
+
+	svplaysound 1 0 SOUND_LOOP
+	svplaysound 1 10 SOUND_LOOP 0.1 100
+
+	effect beam follow lgtning.spr ent_me 0 10 5.0 255 (255,255,0)
+	effect beam follow lgtning.spr ent_me 0 5 5.0 255 (255,255,255)
+}
+
+{ remove_me
+	svplaysound 1 0 SOUND_LOOP
+	clientevent update all CL_IDX remove_fx
+	playsound 2 10 SOUND_PING 0.2 50
+	deleteent ent_me
+}
+
+{ hunt_cycle
+	if $get(ent_me,isalive)
+	callevent 0.1 hunt_cycle
+	if ( game.players == 0 ) exitevent //no one to guide, idle
+
+	if ( !$get(CUR_HOST,isalive) )
+	{
+		if ( $get(CUR_HOST,exists) )
+		{
+			setvard RETURNING_TO_HOST 1 //host died, go find him
+		}
+		else
+		{
+			callevent host_find_new //host disconnected, or somethin, find new...
+			setvard RETURNING_TO_HOST 1 //...then go find him
+			if ( game.players == 0 ) exitevent  //...unless I'm all alone...
+		}
+	}
+
+	if ( RETURNING_TO_HOST )
+	{
+		if ( $get(CUR_HOST,range) > HOST_ORBIT_RANGE )
+		{
+			callevent move_towards CUR_HOST
+		}
+		else
+		{
+			setvard RETURNING_TO_HOST 0
+		}
+	}
+
+	if !RETURNING_TO_HOST
+
+	if ( game.time < INTRO_END )
+	{
+		//orbits hosts for a few seconds before hunting begins
+		callevent orbit_target CUR_HOST
+		exitevent
+	}
+
+	if ( NPCATK_TARGET equals unset )
+	{
+		if ( game.time > NEXT_SCAN )
+		{
+			setvard NEXT_SCAN game.time
+			add NEXT_SCAN 1.0
+			callevent find_new_target
+		}
+		if ( NPCATK_TARGET equals unset ) //got nuttin
+		{
+			if ( $get(CUR_HOST,range) > HOST_ORBIT_RANGE )
+			{
+				callevent move_towards CUR_HOST
+			}
+			else
+			{
+				callevent orbit_target CUR_HOST //orbiting round your head until I get somethin
+			}
+		}
+		else
+		{
+			//new target, blink, noise, reset orbit counter
+			clientevent update all CL_IDX do_alert new_target
+			setvard ORBIT_COUNT 0
+		}
+	}
+	else
+	{
+		if ( $get(NPCATK_TARGET,isalive) )
+		{
+			//move towards or hover around target
+			if ( $get(NPCATK_TARGET,range) > 64 )
+			{
+				callevent move_towards NPCATK_TARGET
+				//%% need a system here to return to owner if I don't reach target in 10 seconds
+				// - lest we go back to noclip idea
+			}
+			else
+			{
+				callevent orbit_target NPCATK_TARGET
+				if ( game.time > NEXT_PULSE ) 
+				{
+					setvard NEXT_PULSE game.time
+					add NEXT_PULSE 1.0
+					if ( $get(NPCATK_TARGET,scriptvar,'NPCATK_TARGET') equals unset )
+					{
+						callevent pulse_heavy //submodel sequence
+						add PULSE_COUNT 1
+					}
+					else
+					{
+						if game.time > NEXT_PULSE_LIGHT
+						setvard NEXT_PULSE_LIGHT game.time
+						add NEXT_PULSE_LIGHT 3.0
+						callevent pulse_light //submodel sequence
+						if $get(CUR_HOST,range) > 200
+						setvard PULSE_COUNT 2
+					}
+					if PULSE_COUNT > 1
+					setvard PULSE_COUNT 0
+					setvard RETURNING_TO_HOST 1
+					setvard NPCATK_TARGET unset //I'll find another when I get back, in case closer
+				}
+			}
+		}
+		else
+		{
+			setvard NPCATK_TARGET unset
+		}
+	}
+}
+
+{ pulse_heavy
+	clientevent update all CL_IDX do_alert pulse_heavy
+	setvard CUR_INFLATE 13
+	setvard CUR_INFLATE_DEST 22
+	callevent do_inflate
+	playsound 0 10 SOUND_PING 0.2 150
+}
+
+{ pulse_light
+	clientevent update all CL_IDX do_alert pulse_light
+	setvard CUR_INFLATE 13
+	setvard CUR_INFLATE_DEST 16
+	callevent do_inflate
+	playsound 0 3 SOUND_PING 0.8 150
+}
+
+{ do_inflate
+	if !DOING_INFLATE
+	setvard DOING_INFLATE 1
+	callevent do_inflate_loop
+}
+
+{ do_inflate_loop
+	if DOING_INFLATE
+
+	if ( CUR_INFLATE < 13 )
+	{
+		setvard DOING_INFLATE 0
+		setmodelbody 0 13
+		setvard CUR_INFLATE 13
+		exitevent
+	}
+
+	callevent 0.1 do_inflate_loop
+
+	add CUR_INFLATE 1
+	setmodelbody 0 CUR_INFLATE
+	if ( CUR_INFLATE >= CUR_INFLATE_DEST ) setvard CUR_INFLATE 12
+	
+}
+
+{ find_new_target
+	race human
+	local L_SPHERE $get_isphere(enemy,2048)
+	race beloved
+	if L_SPHERE isnot none
+
+	setvard POTENTIAL_TARGETS L_SPHERE
+	setvard FINAL_TARGETS ''
+	calleventloop $get_token_amt(POTENTIAL_TARGETS) strip_invalids
+	dbg find_new_target fin FINAL_TARGETS //strip invalid targs (not matching, playing dead, etc.)
+
+	//setvard FINAL_TARGETS $sort_entlist(FINAL_TARGETS,range)
+	setvard NEAREST_ENEMY unset
+	setvard T_NEAREST 9999
+	calleventloop $get_token_amt(FINAL_TARGETS) find_nearest_nme //find nearest to host of valid targs
+	dbg find_new_target nearst NEAREST_ENEMY
+	setvard NPCATK_TARGET NEAREST_ENEMY
+}
+
+{ find_nearest_nme
+	local L_CUR_IDX game.script.iteration
+	local L_CUR_NPC $get_token(FINAL_TARGETS,L_CUR_IDX)
+	local L_CUR_NPC $get_by_idx(L_CUR_NPC,id)
+
+	local L_TARG_ORG $get(L_CUR_NPC,origin)
+	local CUR_HOST_ORG $get(CUR_HOST,origin)
+	local L_DIST $dist(CUR_HOST_ORG,L_TARG_ORG)
+
+	dbg find_nearest_nme dbg $get(L_CUR_NPC,index) $get(L_CUR_NPC,name) dst L_DIST nr L_DIST
+
+	if L_DIST < T_NEAREST
+	setvard T_NEAREST L_DIST
+	setvard NEAREST_ENEMY L_CUR_NPC
+}
+
+{ strip_invalids
+	local L_CUR_IDX game.script.iteration
+	local L_CUR_NPC $get_token(POTENTIAL_TARGETS,L_CUR_IDX)
+	local L_CUR_NPC $get_by_idx(L_CUR_NPC,id)
+	dbg strip_invalids $lcase($get(L_CUR_NPC,name)) alv $get(L_CUR_NPC,isalive) pd $get(L_CUR_NPC,scriptvar,'PLAYING_DEAD')
+	if ( SEARCH_STRING isnot all )
+	{
+		if $lcase($get(L_CUR_NPC,name)) !contains SEARCH_STRING
+		exitevent
+	}
+	if $get(L_CUR_NPC,isalive)
+	if !$get(L_CUR_NPC,scriptvar,'PLAYING_DEAD')
+	//corruption avoidance
+	local L_LEN_NPC $len(L_CUR_NPC)
+	if $math(add,L_LEN_NPC,$len(FINAL_TARGETS)) < 254
+	token.add FINAL_TARGETS $get_token(POTENTIAL_TARGETS,L_CUR_IDX)
+}
+
+{ move_towards //<target>
+	//mostly from base_flyer_grav
+
+	local L_MOVE_TARG PARAM1
+	if ( !$get(L_MOVE_TARG,isplayer) )
+	{
+		local L_MOVE_ORG $get(PARAM1,origin)
+		vectoradd L_MOVE_ORG z 64
+		callevent npcatk_setmovedest L_MOVE_ORG 32
+		
+	}
+	else
+	{
+		callevent npcatk_setmovedest $get(PARAM1,origin) 32
+	}
+}
+
+{ orbit_target //<target>
+	local L_ORBIT_ORG $get(PARAM1,origin)
+
+	add ORBIT_YAW 10
+	if ( ORBIT_YAW > 359.99 ) setvard ORBIT_YAW 0
+
+	local L_ORBIT_WIDTH $get(PARAM1,width)
+	if ( !L_ORBIT_WIDTH ) local L_ORBIT_WIDTH 32
+
+	add L_ORBIT_WIDTH 32
+
+	local L_MOVE_DEST L_ORBIT_ORG
+
+	local L_V_ADJ 64
+
+	if ( $get(PARAM1,isplayer) ) local L_V_ADJ 32
+
+	vectoradd L_MOVE_DEST $relpos($vec(0,ORBIT_YAW,0),$vec(0,L_ORBIT_WIDTH,L_V_ADJ))
+
+	local MY_Z $get(ent_me,origin.z)
+	local MOVE_DEST_Z $vec.z(L_MOVE_DEST)
+
+	callevent npcatk_setmovedest L_MOVE_DEST 1
+}
+
+{ host_find_new
+	getplayersnb POSSIBLE_HOSTS
+	setvard POSSIBLE_HOSTS $sort_entlist(POSSIBLE_HOSTS,range)
+	setvard CUR_HOST $get_token(POSSIBLE_HOSTS,0)
+}
+
+{ npcatk_setmovedest //<origin> <min>
+	local L_MOVEDEST PARAM1
+	local MY_ORG $get(ent_me,origin)
+	local ANG_TO_DEST $angles3d(MY_ORG,L_MOVEDEST)
+	vectorset ANG_TO_DEST x $neg(vec.x(ANG_TO_DEST))
+
+	//target range
+	local L_RANGE $dist(MY_ORG,L_MOVEDEST)
+	if ( L_RANGE > 640 ) local L_RANGE 640
+	local L_RANGE $math(divide,L_RANGE,640)
+	local L_SPEED $ratio(L_RANGE,0,400)
+
+	//target range z
+	if ( $vec.z(MY_ORG) > $vec.z(L_MOVEDEST) ) local L_ZRANGE $math(subtract,$vec.z(MY_ORG),$vec.z(L_MOVEDEST))
+	if ( $vec.z(MY_ORG) < $vec.z(L_MOVEDEST) ) local L_ZRANGE $math(subtract,$vec.z(L_MOVEDEST),$vec.z(MY_ORG))
+	if ( L_ZRANGE > 640 ) local L_ZRANGE 640
+	local L_ZRANGE $math(divide,L_ZRANGE,640)
+	local L_ZSPEED $ratio(L_ZRANGE,0,200)
+	if ( $vec.z(MY_ORG) > $vec.z(L_MOVEDEST) ) local L_ZSPEED $neg(L_ZSPEED)
+
+	setvelocity ent_me $relvel(ANG_TO_DEST,$vec(0,L_SPEED,L_ZSPEED))
+
+	if $get(CUR_HOST,isalive)
+
+	//master range (gets louder as further away, higher with more speed
+	local L_MASTER_ORG $get(CUR_HOST,origin)
+	local L_VOL $dist(MY_ORG,L_MASTER_ORG)
+	if ( L_VOL > 640 ) local L_VOL 640
+	local L_VOL $math(divide,L_VOL,640)
+
+
+	svplaysound 1 $int($ratio(L_VOL,1,10)) SOUND_LOOP 0.1 $int($ratio(L_RANGE,80,200))
+}
+
+{ remove_finders //usually from GM
+	callevent remove_me
+}
+

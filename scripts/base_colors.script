@@ -1,0 +1,108 @@
+//you can use this as an #include in client scripts to maintain consistency in elemental color coding.
+//this is also used to set the related global values in sv_world (G_ELE_NAMES, G_ELE_COLORS, G_ELE_COLOR_RATIOS)
+{
+	//element names and colors (copy these to consts, if you need them in a client script) Thothie SEP2019_07
+	const C_ELE_NAMES "magic;blunt;pierce;slash;cold;fire;lightning;poison;dark;holy;acid;all"
+	const C_ELE_COLOR_RATIOS "(1.0,1.0,1.0);(1.0,1.0,1.0);(1.0,1.0,1.0);(1.0,1.0,1.0);(0.5,0.5,1.0);(1.0,0.5,0.25);(1.0,1.0,0);(0,1.0,0);(1.0,0,1.0);(1.0,0.75,0.25);(0.25,0.75,0.25);(1.0,1.0,1.0)"
+	const C_ELE_COLORS "(255,255,255);(255,255,255);(255,255,255);(255,255,255);(128,128,255);(255,128,64);(255,255,0);(0,255,0);(255,0,255);(255,192,64);(64,192,64);(255,255,255)"
+	const C_ELE_DAMAGE_RATIOS "0,5;1.0;1.0;1.0;0.5;2.0;0.75;0.5;0.5;1.0;0.5;0"
+	//C_ELE_DAMAGE_RATIOS provides "suggested" standard damage multipliers based on skill.
+	//- fire provides the highest raw damage.
+	//- lightning provides fair damage and secondary effects are generally minor.
+	//- cold provides somewhat low damage, but has heavy secondary effects.
+	//- poison usually has double duration but half damage. (When increasing 5sec DOT to 10sec, halve damage - blinding poison should be brief and less damaging)
+	//- defile DOT standard is 0.25, vs. the raw dark damage (eg. shadowflames) standard of 0.5
+}
+
+//example usage (pull color) [server]:
+//local L_COLOR $get_token(G_ELE_COLORS,$get_find_token(G_ELE_NAMES,L_ELEMENT))
+
+//example usage (pull damage ratio for fire) [server]:
+//local L_COLOR $get_token(C_ELE_DAMAGE_RATIOS,$get_find_token(G_ELE_NAMES,fire))
+
+
+//example usage (mix colors) [server]:
+//local L_COLOR1 $get_token(G_ELE_COLOR_RATIOS,$get_find_token(G_ELE_NAMES,L_ELM_ACT))
+//local L_COLOR2 $get_token(G_ELE_COLOR_RATIOS,$get_find_token(G_ELE_NAMES,L_ELM_OFF))
+//local L_COLOR $vec(255,255,255)
+//vectormultiply L_COLOR L_COLOR1
+//vectormultiply L_COLOR L_COLOR2
+
+//example usage (16-bit alpha palette color) [client with this include]:
+//local L_COLOR $get_token(C_ELE_COLOR_RATIOS,$get_find_token(C_ELE_NAMES,L_ELEMENT))
+//local L_COLOR_16 $stradd('(',$vec.x(L_COLOR),$vec.y(L_COLOR),$vec.z(L_COLOR),L_ALPHA,')')
+
+//======================================================
+//FUNCTIONS TO MAKE THIS SIMPLER (copy/paste, uncomment)
+//======================================================
+
+//basis ccolor retrieval
+//{ func_get_elecolor //<element>
+//	local L_ELM PARAM1
+//	if ( game.serverside )
+//	{
+//		local L_COLOR $get_token(G_ELE_COLORS,$get_find_token(G_ELE_NAMES,L_ELM))
+//	}
+//	else
+//	{
+//		local L_COLOR $get_token(C_ELE_COLORS,$get_find_token(C_ELE_NAMES,L_ELM)) //requires this include
+//	}
+//	return L_COLOR
+//}
+////example: local L_COLOR $func(func_get_elecolor,holy) - returns (255,192,64)
+
+//16-bit color retrieval (client only, requires this include)
+//{ func_get_elecolor_16 //<element> <alpha> (where as alpha is a float from 0-1)
+//	local L_ELM PARAM1
+//	local L_ALPHA PARAM2
+//	$get_token(C_ELE_COLOR_RATIOS,$get_find_token(C_ELE_NAMES,L_ELM))
+//	local L_COLOR_16 $stradd('(',$vec.x(L_COLOR),$vec.y(L_COLOR),$vec.z(L_COLOR),L_ALPHA,')')
+//	return L_COLOR
+//}
+////example: local L_COLOR $func(func_get_elecolor_16,fire,0.5) - returns (1.0,0.5,0.25,0.5)
+
+//mix color function:
+//{ func_mix_elecolors //<elements...> or <token_string_with_elements>
+//
+//	local L_NUM game.evemt.params //number of params
+//
+//	//tokenize params
+//	setvard T_TEMP ''
+//	if ( !L_NUM ) return 0
+//	else if ( L_NUM == 1 ) setvard T_TEMP PARAM1 //assuming token string
+//	else if ( L_NUM >= 2 ) //if more params, build token string from params (would be nice if we had a function for this)
+//	{
+//		token.add T_TEMP PARAM1
+//		token.add T_TEMP PARAM2
+//	}
+//	else if ( L_NUM >= 3 ) token.add T_TEMP PARAM3
+//	else if ( L_NUM >= 4 ) token.add T_TEMP PARAM4
+//	else if ( L_NUM >= 5 ) token.add T_TEMP PARAM5
+//	else if ( L_NUM >= 6 ) token.add T_TEMP PARAM6
+//	else if ( L_NUM >= 7 ) token.add T_TEMP PARAM7
+//	else if ( L_NUM >= 8 ) token.add T_TEMP PARAM8 //mix more colors than this, and yer garunteed to end up black or white
+//
+//	if L_NUM > 0
+//	setvard T_TEMP1 $vec(255,255,255) //final color, using T_TEMP1 in hopes it matches other optimization efforts
+//	calleventloop $get_token_amt(T_TEMP) func_mix_elecolors_loop
+//	return T_TEMP1
+//}
+//{ func_mix_elecolors_loop
+//	local L_IDX game.script.iteration
+//	local L_COLOR_LIST T_TEMP
+//	local L_CUR_ELEMENT $get_token(L_COLOR_LIST,L_IDX)
+//
+//	if ( game.serverside )
+//	{
+//		local L_COLOR $get_token(G_ELE_COLOR_RATIOS,$get_find_token(G_ELE_NAMES,L_ELM))
+//	}
+//	else
+//	{
+//		local L_COLOR $get_token(C_ELE_COLOR_RATIOS,$get_find_token(C_ELE_NAMES,L_ELM)) //requires this include
+//	}
+//
+//	vectormultiply T_TEMP1 L_COLOR
+//}
+////example: local L_COLOR $func(func_mix_elecolors,cold,fire) returns equiv (128,64,64)
+////example: local L_COLOR $func(func_mix_elecolors,'cold;slash;lightning') returns equiv (128,128,0)
+

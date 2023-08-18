@@ -1,0 +1,455 @@
+#scope server
+//Elemental Resist system shared by both Players and Monsters
+
+//(mysteriously fixed) Bugger - Resetting Holy on timeout for some reason (maybe make sure takedmg holy from darkness isn't using takdmg directly?)
+//%% Increasing an enemy who was poison immune's resistance to poison, then allows them to be cursed by poison vulnerability, even after said increase times out
+
+//scriptflag format:
+//name: eresist_<tag> or stackeresist_<tag>
+//type: eresist_<element> or eresistbase_<element>
+//value: <value>
+
+//method - pull all via $get_scriptflags(ent_me,eresist_<element>|eresistbase_<element>,type_array)
+
+{
+	//it seems possible to provide negative resistances without it healing folks struck by elements, but capping anyways
+	//- is a future "balancing" option to let C_MIN_VULN go negative, thus requiring more adjustments before target becomes vulnerable
+	//- but it does rather suggests you, for instance, gave a skeleton a circulatory system to make it vulnerable to poison.
+	const C_MIN_VULN -2.0 //min resistance
+	const C_MAX_VULN 3.0 //max resistance
+}
+
+#include [server] base_colors //we may need these as constants, should we trigger during spawn/precache
+
+{ ext_eresist_adj //<element> <value> <duration:-1> [ [tag] ["sprite|spriteglow"] ["refresh"] [<applier_to_report_to>] ] -OR- <remove|remove_unique> <tag>
+	//==========================
+
+	//for adjusting elemental resistances, post spawn
+	//negative <value> reduces vulnerability, positive increases
+
+	//if [tag] contains "stack" adjustments will stack
+	//otherwise, if [tag] of <element> exists it will be edited.
+	//if no [tag] is provided, "stack" is assumed. Stacked tags cannot be edited.
+
+	//<durations> of 0 are also not valid, use -1 for permanent.
+
+	//params after [tag] can come in any order, or in place of [tag]:
+	//"sprite|spriteglow" - use sprite indictor or sprite and brief glow shell effect
+	//"refresh" - if [tag] exists of same element, update expire time
+	//"<applier_to_report_to>" - (wip) report back to this entity with "ext_eresist_success <success:0|1> <targeted_ent> <element> <value> <tag>" (will also provide messages for players)
+
+	//all direct usages of "takedmg" apply an element to this array tagged "base" through game_set_takedmg. 
+	//Base tags are used as the base values when adjusting elements through other tags. There can only be one for each element, but it will be updated on change.
+
+	//remove <tag> removes all instances of <tag>
+
+	//example usages:
+
+	//example (simple): add a stack of 10% fire vulnerability to mob's target for 10 seconds:
+	//callexternal NPCATK_TARGET ext_eresist_adj fire 0.1 10.0
+
+	//example: add 25% cold resistance to target with a tag for later removal:
+	//callexternal SOME_PLAYER ext_eresist_adj cold -0.25 -1 cold_resist_spell
+
+	//example: remove the above resistance bonus:
+	//callexternal SOME_PLAYER ext_eresist_adj remove cold_resist_spell
+
+	//example (complex): add a removable stack of 50% cold vulnerability for 15 seconds from a weapon, with fx and tracker sprite, report to owner with result:
+	//- bonus complication: also allows different players with the same weapon to add their own vulnerability
+	//callexternal $get(ent_owner,target) ext_eresist_adj cold 0.5 15.0 $stradd('ice_blade',$get(ent_owner,index)) spriteglow $stradd('report:',$get(ent_owner,index))
+
+	//TMI: tags actually become eresist_<tag> - so if you need to check for the existence of a unique tag: $get_scriptflag(<target>,name_exists,$stradd(eresist_,<tag>))
+	//element is appeneded to type as eresist_<element> or eresistbase_<element>, so you can have multiple uses of the same tag over different elements, but it is not recomended.
+
+	//==========================
+
+	//this replaces players/element_resist which has been removed from the player's includes
+
+	dbg ext_eresist_adj ele PARAM1 adj PARAM2 dur PARAM3 tag PARAM4 xtra PARAM5 xtra PARAM6
+
+	if ( $get(ent_me,isplayer) )
+	{
+		//do not affect players still at the spawn menu
+		if !$get(ent_me,scriptvar,'PLR_IN_WORLD')
+		exitevent
+	}
+
+	local L_ELEMENT PARAM1
+	local L_VALUE PARAM2
+	local L_DURATION PARAM3
+
+	if ( L_ELEMENT startswith remove )
+	{
+		if ( L_ELEMENT equals remove ) callevent eresist_remove $pass(PARAM2)
+		exitevent
+	}
+
+	if ( L_DURATION == 0 )
+	{
+		//use -1 for permanent
+		infomsg all "SCRIPT ERROR" "ext_eresist_adj with duration of 0"
+		exitevent //could instead swap this for -1, but suggests something went wrong
+	}
+
+	if ( $inset_string(refresh,PARAM4,PARAM5,PARAM6) ) local L_REFRESH 1
+	if ( PARAM4 startswith sprite ) local L_DO_FX PARAM4
+	if ( PARAM5 startswith sprite ) local L_DO_FX PARAM5
+	if ( PARAM6 startswith sprite ) local L_DO_FX PARAM6
+	if ( $get(PARAM4,exists) ) local L_REPORT PARAM4
+	if ( $get(PARAM5,exists) ) local L_REPORT PARAM5
+	if ( $get(PARAM6,exists) ) local L_REPORT PARAM6
+
+	//do not allow mobs invulnerable to elements to be made vulnerable though adjustments (though you can still use takedmg to adjust base) [may undo]
+	dbg ext_eresist_adj (check_base) has $get_scriptflag(ent_me,$stradd(eresistbase_,L_ELEMENT),type_exists) @ $get_scriptflag(ent_me,$stradd(eresistbase_,L_ELEMENT),totalvalue)
+
+	//%% need to switch this up to a "weakened but not sufficient" method
+//	if ( $get_scriptflag(ent_me,$stradd(eresistbase_,L_ELEMENT),type_exists) )
+//	{
+//		//test: . event ext_eresist_adj poison 3.0 30.0 stack spriteglow ME
+//		if $get_scriptflag(ent_me,$stradd(eresistbase_,L_ELEMENT),totalvalue) == 0
+//		dbg ext_eresist_adj has_immunity L_ELEMENT ( L_VALUE )
+//		if L_VALUE > 0
+//		if ( L_REPORT isnot 'L_REPORT' )
+//		{
+//			dbg ext_eresist_adj target_resisted_vulnerability
+//			callexternal L_REPORT ext_eresist_success 0 $get(ent_me,id) L_ELEMENT L_VALUE
+//		}
+//		exitevent
+//	}
+
+	if ( $math(add,$get_takedmg(ent_me,L_ELEMENT),L_VALUE) < 0 ) local L_NO_SPRITE 1 //do not add sprite if not yet vulnerable to element
+
+	if ( PARAM4 !startswith PARAM )
+	{
+		if PARAM4 !startswith sprite
+		if PARAM4 !startswith refresh
+		if PARAM4 !startswith report
+		local L_TAG PARAM4
+//		if L_TAG contains unique
+//		if ( L_TAG contains stack )
+//		{
+//			local L_OUT_MSG $stradd('ext_eresist_adj tag ',L_TAG,' contains both unique and stack.')
+//			infomsg all "SCRIPT_ERROR" L_OUT_MSG
+//			exitevent //techinically a unique stack may work, but similarly, something has gone wrong, and it could not be removed via remove_unique
+//		}
+	}
+	else
+	{
+		local L_TAG stack
+	}
+
+//for the old report system (should see about tweaking this one up to report durations though)
+//	if ( L_DURATION > 0 )
+//	{
+//		local L_EXPIRE_TIME $math(add,game.time,L_DURATION)
+//	}
+//	else
+//	{
+//		local L_EXPIRE_TIME -1
+//	}
+
+	local L_CUR_TAKEDMG $get_takedmg(ent_me,L_ELEMENT) //so we can report back later
+
+	if ( L_TAG contains stack )
+	{
+		//stacking tags are always added
+		callevent eresist_add L_ELEMENT L_VALUE L_DURATION L_TAG none L_REPORT
+	}
+	else
+	{
+		//find tag
+		local L_ACT_TAG $stradd(eresist_,L_TAG)
+		local L_FIND_TAG $get_scriptflag(ent_me,name_exists,L_ACT_TAG)
+
+		dbg ext_eresist_adj findtag L_ACT_TAG L_FIND_TAG
+
+		if ( L_FIND_TAG )
+		{
+			if ( !L_REFRESH )
+			{
+				//same tag, and not marked for refresh, so abort
+				if ( $get_scriptflag(ent_me,name_value,L_ACT_TAG) == L_VALUE ) exitevent
+			}
+			else
+			{
+				callevent eresist_add L_ELEMENT L_VALUE L_DURATION L_TAG edit L_REPORT
+			}
+		}
+		else
+		{
+			//new tag
+			callevent eresist_add L_ELEMENT L_VALUE L_DURATION L_TAG none L_REPORT
+		}
+	}
+
+	//dbg ext_eresist_adj outresist L_ELEMENT L_CUR_TAKEDMG nodj L_NO_ADJUST
+
+	//handled in recalc - but we want a report function to notify when applied by the player on a target
+//	if ( $get(ent_me,isplayer) )
+//	{
+//		callevent ext_eresist_report adjusted L_ELEMENT L_VALUE L_DURATION L_CUR_TAKEDMG
+//	}
+
+	if ( L_DO_FX startswith sprite )
+	{
+		playsound 2 10 magic/debuff.wav 0.1 100
+		local L_COLOR $get_token(G_ELE_COLORS,$get_find_token(G_ELE_NAMES,L_ELEMENT))
+		if ( L_DO_FX equals spriteglow )
+		{
+			effect glow ent_me L_COLOR 64 1.0 0.01
+		}
+		//clientevent update all const.localplayer.scriptID cl_debuff_sprite $get(ent_me,index) $get_find_token(G_ELE_NAMES,L_ELEMENT) L_DURATION
+		if !L_NO_SPRITE
+		if ( L_VALUE < 0 )
+		{
+			clientevent update all const.localplayer.scriptID cl_status_sprite 2 $get(ent_me,index) L_DURATION $get_find_token(G_ELE_NAMES,L_ELEMENT)
+		}
+		else
+		{
+			clientevent update all const.localplayer.scriptID cl_status_sprite 1 $get(ent_me,index) L_DURATION $get_find_token(G_ELE_NAMES,L_ELEMENT)
+		}
+	}
+}
+
+{ game_scriptflag_update //<action> <name> [type] [value] [base_expire_time]
+	if PARAM3 startswith eresist
+	if PARAM3 !contains base
+	dbg game_scriptflag_update [eresist] PARAM1 PARAM2 PARAM3 PARAM4 PARAM5
+	callevent eresist_recalc $string_from(PARAM3,'_') $pass(PARAM5)
+}
+
+{ game_scriptflag_expired //<name_id> <type> <value> <expire_time> <message:msg|none>
+	dbg game_scriptflag_expired PARAM1 PARAM2 PARAM3 PARAM4 PARAM5
+	callevent eresist_recalc $string_from(PARAM2,'_')
+}
+
+{ game_set_takedmg //<element> <ratio> [adjust] called with each use of takedmg
+	dbg game_set_takedmg PARAM1 PARAM2 PARAM3
+
+	if PARAM3 isnot adjust
+	//if PARAM1 isnot all
+
+	if ( PARAM1 isnot holy )
+	{
+		capvar PARAM2 0 3
+	}
+
+	//add new base element
+	callevent eresist_add $pass(PARAM1) $pass(PARAM2) -1 base
+}
+
+{ eresist_add //<element> <ratio> <time> <tag|"base"> ['edit'|'none'] [report_to_id]
+
+	dbg eresist_add PARAM1 PARAM2 PARAM3 PARAM4 PARAM5 $get(PARAM6,name)
+
+	local L_ACTION add
+	if ( PARAM5 equals edit ) local L_ACTION edit
+
+	if ( PARAM4 equals base )
+	{
+		if ( PARAM2 == 0 ) local PARAM2 C_MIN_VULN
+		local L_ERESIST_TAG $stradd(eresistbase_,PARAM1) //bases store names based on element instead of tag
+		local L_ERESIST_TYPE $stradd(eresistbase_,PARAM1) //types always store based on element
+		if ( $get_scriptflag(ent_me,L_ERESIST_TAG,name_exists) ) local L_ACTION edit //we can edit the base of each element, but not add new ones of the same element (name would match, preventing it anyways)
+		scriptflags ent_me L_ACTION L_ERESIST_TAG L_ERESIST_TYPE PARAM2 -1
+	}
+	else
+	{
+		local L_ERESIST_TAG $stradd(eresist_,PARAM4) //not a base, so store tag instead of element
+		local L_ERESIST_TYPE $stradd(eresist_,PARAM1) //element is alwways stored in type
+
+		//elemental vulnerability caps
+		//- using these $gets may cause issues during spawn - maybe check time since spawn
+		local L_VALUE PARAM2
+		local L_MIN_CAP C_MIN_VULN
+		local L_MAX_CAP C_MAX_VULN
+		if ( L_VALUE > L_MAX_CAP )
+		{
+			if PARAM1 equals holy
+			if ( $get(ent_me,isplayer) ) add L_MAX_CAP 7.0
+			if ( $get(ent_me,race) equals undead ) add L_MAX_CAP 2.0 //might need base_checkundead here
+			if ( $get(ent_me,race) equals demon ) add L_MAX_CAP 1.0
+		}
+		capvar L_VALUE L_MIN_CAP L_MAX_CAP
+
+		if ( PARAM4 !contains stack )
+		{
+			if $get_scriptflag(ent_me,L_ERESIST_TAG,name_exists)
+			local L_ACTION edit //can't add duplicate non-stack name
+		}
+		scriptflags ent_me L_ACTION L_ERESIST_TAG L_ERESIST_TYPE L_VALUE PARAM3
+
+		if ( $get(PARAM6,isalive) )
+		{
+			dbg eresist_add report
+			if ( $get_takedmg(ent_me,PARAM1) > 0 )
+			{
+				callexternal PARAM6 ext_eresist_success 1 $get(ent_me,id) $pass(PARAM1) $pass(PARAM2)
+			}
+			else
+			{
+				local L_OUT_MSG $get(ent_me,name)
+				stradd L_OUT_MSG  "'s resistance to "
+				stradd L_OUT_MSG PARAM1
+				stradd L_OUT_MSG " is weakened, but remains immune."
+				callexternal PARAM6 ext_playermessage_stack disabled L_OUT_MSG
+			}
+		}
+	}
+	//recalc will be called from game_scriptflag_update
+}
+
+{ eresist_recalc //<element> [time_expires]
+
+	local L_TYPE $stradd(eresist_,PARAM1)
+	local L_BASE_TYPE $stradd(eresistbase_,PARAM1)
+
+	local L_BASE_VALUE $get_scriptflag(ent_me,L_BASE_TYPE,type_first)
+	if ( L_BASE_VALUE equals none )
+	{
+		local L_BASE_VALUE 1.0
+	}
+
+	local L_TOTAL $get_scriptflag(ent_me,L_TYPE,totalvalue)
+	if ( L_TOTAL isnot none )
+	{
+		local L_TOTAL $math(add,L_BASE_VALUE,L_TOTAL)
+	}
+	else
+	{
+		local L_TOTAL L_BASE_VALUE
+	}
+
+	dbg eresist_recalc PARAM1 L_BASE_VALUE + $math(capvar,$get_scriptflag(ent_me,L_TYPE,totalvalue),C_MIN_VULN,C_MAX_VULN) = L_TOTAL
+
+	local L_CUR_TAKEDMG $get_takedmg(ent_me,PARAM1)
+	if L_CUR_TAKEDMG != L_TOTAL //dun do anything if unchanged
+
+	//elemental vulnerability caps
+	//- using these $gets may cause issues during spawn - maybe check time since spawn
+	local L_MIN_CAP C_MIN_VULN
+	local L_MAX_CAP C_MAX_VULN
+	if ( L_TOTAL > L_MAX_CAP )
+	{
+		if PARAM1 equals holy
+		if ( $get(ent_me,isplayer) ) add L_MAX_CAP 7.0
+		if ( $get(ent_me,race) equals undead ) add L_MAX_CAP 5.0 //might need base_checkundead here
+		if ( $get(ent_me,race) equals demon ) add L_MAX_CAP 4.0
+	}
+	capvar L_TOTAL L_MIN_CAP L_MAX_CAP
+
+	if ( L_TYPE !contains base )
+	{
+		if $get(ent_me,isplayer)
+		if ( PARAM2 > 0 )
+		{
+			local L_DURATION_MSG " ("
+			stradd L_DURATION_MSG $int(PARAM2)
+			stradd L_DURATION_MSG "s)"
+		}
+		else
+		{
+			local L_DURATION_MSG -1
+		}
+
+		callevent ext_eresist_report recalc $pass(PARAM1) L_TOTAL L_CUR_TAKEDMG L_DURATION_MSG
+	}
+
+	takedmg PARAM1 L_TOTAL adjust
+}
+
+{ eresist_recalc_all
+	calleventloop $get_token_amt(C_ELE_NAMES) eresist_recalc_all_loop
+}
+
+{ eresist_recalc_all_loop
+	local L_CUR_ELM $get_token(C_ELE_NAMES,game.script.iteration)
+	callevent eresist_recalc L_CUR_ELM
+}
+
+{ eresist_remove //<tag>
+	local L_TAG $stradd(eresist_,PARAM1)
+	scriptflags ent_me remove L_TAG
+	callevent eresist_recalc_all
+}
+
+{ eresist_remove_adj //<element>
+	//removes all eresist adjustments of a single element (but not bases)
+	dbg eresist_remove_adj cleartype $stradd(eresist_,PARAM1)
+	scriptflags ent_me cleartype $stradd(eresist_,PARAM1)
+}
+
+//{ eresist_remove_base //<element>
+//	//removes all eresist bases of a single element (but not adjustments)
+//	//%% not sure if we ever need, comment out if we don't to save script overhead
+//	scriptflags ent_me cleartype $stradd(eresistbase_,PARAM1)	
+//}
+
+
+{ eresist_remove_all_adj
+	//removes all non-base eresists
+	calleventloop $get_token_amt(C_ELE_NAMES) eresist_remove_all_adj_loop
+	callevent eresist_recalc_all
+}
+
+//{ eresist_remove_all //remove all eresist scriptflags
+//	//%% not sure if we ever need, comment out if we don't to save script overhead
+//	calleventloop $get_token_amt(C_ELE_NAMES) eresist_remove_all_adj_loop
+//	calleventloop $get_token_amt(C_ELE_NAMES) eresist_remove_all_base_loop
+//}
+
+{ eresist_remove_all_adj_loop
+	local L_CUR_ELM $get_token(C_ELE_NAMES,game.script.iteration)
+	callevent eresist_remove_adj L_CUR_ELM
+}
+
+//{ eresist_remove_all_base_loop
+//	//%% not sure if we ever need, comment out if we don't to save script overhead
+//	local L_CUR_ELM $get_token(C_ELE_NAMES,game.script.iteration)
+//	callevent eresist_remove_base L_CUR_ELM
+//}
+
+{ game_death
+	if $get(ent_me,isplayer)
+	callevent eresist_remove_all_adj
+}
+
+{ ext_eresist_success //<success:0|1> <targeted_ent> <element> <value> 
+	if ( !PARAM1 )
+	{
+		if $get(ent_me,isplayer)
+		local L_MSG $get(PARAM2,name)
+		stradd L_MSG " resists the "
+		stradd L_MSG PARAM3
+		stradd L_MSG " vulnerability magic."
+		callexternal ent_me ext_playermessage_stack yellow L_MSG
+	}
+	else
+	{
+		if $get(ent_me,isplayer)
+		local L_VALUE PARAM4
+		if ( L_VALUE < 0 )
+		{
+			local L_MSG "You increase "
+			stradd L_MSG $get(PARAM2,name)
+			stradd L_MSG "'s resistance to "
+			stradd L_MSG PARAM3
+			stradd L_MSG ". ("
+			local L_ENGRISH $math(multiply,L_VALUE,-1)
+			stradd L_MSG $int($math(multiply,L_ENGRISH,100))
+			stradd L_MSG "%)"
+			callexternal ent_me  ext_playermessage_stack green L_MSG
+		}
+		else
+		{
+			local L_MSG "You curse "
+			stradd L_MSG $get(PARAM2,name)
+			stradd L_MSG " with vulnerability to "
+			stradd L_MSG PARAM3
+			stradd L_MSG ". ("
+			stradd L_MSG $int($math(multiply,L_VALUE,100))
+			stradd L_MSG "%)"
+			callexternal ent_me ext_playermessage_stack green L_MSG
+		}
+	}
+}
