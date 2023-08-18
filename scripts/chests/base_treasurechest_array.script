@@ -146,7 +146,7 @@
 		}
 
 		
-		setvard TC_NPLAYERS game.playersnb.noafk
+		setvard TC_NPLAYERS 1
 		setvard TC_NPLAYERS_X2 TC_NPLAYERS
 		multiply TC_NPLAYERS_X2 2
 		setvard TC_NPLAYERS_X5 TC_NPLAYERS
