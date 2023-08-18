@@ -241,7 +241,6 @@
 	if ( L_CUR_GOLD > 0 )
 	{
 		
-		if game.central 
 		if ( game.players > 1 )
 		{
 			local ORG_COLD L_CUR_GOLD
@@ -303,7 +302,6 @@
 		local L_ACPLAYERS game.playersnb
 		if ( L_ACPLAYERS > 1 )
 		{
-			if game.central
 			multiply L_ACPLAYERS 10
 			multiply L_ACPLAYERS 0.01
 			local L_ADD_CHANCE BC_HAS_PICK_CHANCE

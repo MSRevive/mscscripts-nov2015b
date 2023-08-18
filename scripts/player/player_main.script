@@ -708,7 +708,7 @@
 	{
 		setvarg G_HELP_ON 0
 		consolemsg ent_me Be sure to get more info at: www.msremake.com/forums
-		gplayermessage ent_me You can type “help” again to restore the help panels
+		gplayermessage ent_me You can type ï¿½helpï¿½ again to restore the help panels
 		usetrigger help_spr
 		local EXIT_SUB 1
 	}

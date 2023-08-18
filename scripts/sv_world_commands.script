@@ -1185,7 +1185,6 @@
 	{
 		local DO_ABORT 1
 		if ( G_DEVELOPER_MODE ) local L_DO_ABORT 0
-		if ( game.central ) local L_DO_ABORT 0
 		if !DO_ABORT
 
 		local L_PARAM1 PARAM2

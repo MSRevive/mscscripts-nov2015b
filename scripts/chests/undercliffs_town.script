@@ -15,7 +15,7 @@
 	addstoreitem STORENAME health_apple 25 0
 	local L_GOLD_TO_ADD $get(CHEST_USER,scriptvar,'PLR_TOTAL_DMG')
 	multiply L_GOLD_TO_ADD 10
-	if ( game.central ) multiply L_GOLD_TO_ADD game.playersnb
+	multiply L_GOLD_TO_ADD game.playersnb
 
 	callevent add_gold $int(L_GOLD_TO_ADD)
 }

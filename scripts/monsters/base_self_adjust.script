@@ -462,26 +462,23 @@
 
 	
 	
-	if ( game.central )
+	expadj 2.0 noscale "FN" 
+	
+	local L_N_PLAYER_ADJ game.playersnb.noafk
+	local L_DEBUG "FN+Players>1:"
+	add L_DEBUG L_N_PLAYER_ADJ
+	if ( DROP_GOLD_AMT isnot 'DROP_GOLD_AMT' ) multiply DROP_GOLD_AMT N_PLAYERS
+
+	if ( NPC_IS_BOSS )
 	{
-		expadj 2.0 noscale "FN" 
-		
-		local L_N_PLAYER_ADJ game.playersnb.noafk
-		local L_DEBUG "FN+Players>1:"
-		add L_DEBUG L_N_PLAYER_ADJ
-		if ( DROP_GOLD_AMT isnot 'DROP_GOLD_AMT' ) multiply DROP_GOLD_AMT N_PLAYERS
-
-		if ( NPC_IS_BOSS )
-		{
-			expadj 4.0 noscale "FNBoss" 
-		}
-
-		if ( L_N_PLAYER_ADJ > 1 )
-		subtract L_N_PLAYER_ADJ 1
-		multiply L_N_PLAYER_ADJ 0.5
-		add L_N_PLAYER_ADJ 1
-		expadj L_N_PLAYER_ADJ noscale L_DEBUG
+		expadj 4.0 noscale "FNBoss" 
 	}
+
+	if ( L_N_PLAYER_ADJ > 1 )
+	subtract L_N_PLAYER_ADJ 1
+	multiply L_N_PLAYER_ADJ 0.5
+	add L_N_PLAYER_ADJ 1
+	expadj L_N_PLAYER_ADJ noscale L_DEBUG
 
 	
 
@@ -489,14 +486,11 @@
 	setvard NPC_EXP_FINAL NPC_GIVE_EXP
 
 	
-	if ( game.central )
-	{
-		if NPC_GIVE_EXP isnot 0
-		if NPC_ORIG_EXP isnot 'NPC_ORIG_EXP'
-		local L_TOTAL_XP_ADJ NPC_GIVE_EXP
-		divide L_TOTAL_XP_ADJ NPC_ORIG_EXP
-		if ( DROP_GOLD_AMT isnot 'DROP_GOLD_AMT' ) multiply DROP_GOLD_AMT L_TOTAL_XP_ADJ
-	}
+	if NPC_GIVE_EXP isnot 0
+	if NPC_ORIG_EXP isnot 'NPC_ORIG_EXP'
+	local L_TOTAL_XP_ADJ NPC_GIVE_EXP
+	divide L_TOTAL_XP_ADJ NPC_ORIG_EXP
+	if ( DROP_GOLD_AMT isnot 'DROP_GOLD_AMT' ) multiply DROP_GOLD_AMT L_TOTAL_XP_ADJ
 
 }
 

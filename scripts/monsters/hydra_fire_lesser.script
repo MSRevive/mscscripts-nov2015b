@@ -172,13 +172,10 @@
 { hydra_finalize
 	local L_GOLD $get(ent_me,maxhp)
 	local L_GOLD_MULTI 0.5
-	if ( game.central )
-	{
-		local L_PLAYERS game.playersnb
-		if L_PLAYERS > 1
-		multiply L_PLAYERS 0.5
-		add L_GOLD_MULTI L_PLAYERS
-	}
+	local L_PLAYERS game.playersnb
+	if L_PLAYERS > 1
+	multiply L_PLAYERS 0.5
+	add L_GOLD_MULTI L_PLAYERS
 	multiply L_GOLD L_GOLD_MULTI
 	gold L_GOLD
 }
