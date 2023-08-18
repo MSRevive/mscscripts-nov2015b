@@ -1,8 +1,0 @@
-//Clock - minute hand brush
-
-{
-	const local.updateminutehand 1
-}
-
-#include worlditems/clock_base
-

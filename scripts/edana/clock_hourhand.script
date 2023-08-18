@@ -1,8 +1,0 @@
-//Clock - Hour hand entity brush
-
-{
-	const local.updatehourhand 1
-}
-
-#include worlditems/clock_base
-
