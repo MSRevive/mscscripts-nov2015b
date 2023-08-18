@@ -1,6 +1,6 @@
 @ECHO OFF
 
-set version_tag=NOV2015b
+set version_tag=NOV2015a
 set out_path=_comp
 
 :loop
@@ -11,23 +11,23 @@ echo.
 pause
 echo.
 echo.
-rem if "%1"=="" goto :error_par
-cd .\scripts
 
 echo.
-echo ====================== Porting Item List and Script Packer...  
+echo ====================== Setting time stamp... 
 echo.
-
-rem copy %script_path%\items.txt %out_path%
-copy .\ScriptPack.exe %out_path%
+cd ./scripts
+echo.
+echo { >beta_date.script
+echo 	const BETA_TIMESTAMP "DEVELOPER %date% %time%" >>beta_date.script
+echo 	setvarg G_SCRIPT_VERSION %version_tag% >>beta_date.script
+echo } >>beta_date.script
 echo Done.
 
 echo.
 echo ====================== Compiling...
 echo.
-
-cd /d %out_path%
-ScriptPack.exe
+cd ../
+Scriptpack.exe
 echo Done.
 
 echo.
