@@ -198,7 +198,7 @@
 		}
 
 		//these vars are commonly used in chest_additems
-		setvard TC_NPLAYERS game.playersnb.noafk
+		setvard TC_NPLAYERS 1
 		setvard TC_NPLAYERS_X2 TC_NPLAYERS
 		multiply TC_NPLAYERS_X2 2
 		setvard TC_NPLAYERS_X5 TC_NPLAYERS
@@ -637,13 +637,6 @@
 
 	
 	//multiply gold by rank here
-	
-
-//	if ( G_DEVELOPER_MODE ) messageall green add_gold_by_hp: Userhp $get(CHEST_USER,maxhp) - BAG_SIZE
-//
-//	local ITEM_NAME gold_pouch_
-//	stradd ITEM_NAME BAG_SIZE
-//	addstoreitem STORENAME ITEM_NAME 1 0
 }
 
 { add_gold //<amt>
@@ -725,15 +718,6 @@
 		callevent 0.1 chest_glowshell
 	}
 }
-
-//{ bc_dish_out_mapper_items
-//
-//	//dbg bc_dish_out_mapper_items
-//
-//	local CUR_ITEM game.script.iteration
-//	local MAPPER_ITEM $get_token(BC_MAPPER_ITEMS,CUR_ITEM)
-//	addstoreitem STORENAME MAPPER_ITEM 1 0
-//}
 
 { [server] add_noob_arrows //[amt] - Amount must be divisible by 15!
 

@@ -160,7 +160,7 @@
 	createstore STORENAME
 
 	//these vars are commonly used in chest_additems
-	setvard TC_NPLAYERS game.playersnb
+	setvard TC_NPLAYERS 1
 	setvard TC_NPLAYERS_X2 TC_NPLAYERS
 	multiply TC_NPLAYERS_X2 2
 	setvard TC_NPLAYERS_X5 TC_NPLAYERS
