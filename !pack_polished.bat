@@ -1,7 +1,7 @@
 @ECHO OFF
 
 set version_tag=NOV2015a
-set out_path=_comp
+set out_path=D:\github\mscscripts-nov2015b\scripts
 
 :loop
 title Packing TEST SC.DLL %date% %time%
@@ -13,21 +13,9 @@ echo.
 echo.
 
 echo.
-echo ====================== Setting time stamp... 
-echo.
-cd ./scripts
-echo.
-echo { >beta_date.script
-echo 	const BETA_TIMESTAMP "DEVELOPER %date% %time%" >>beta_date.script
-echo 	setvarg G_SCRIPT_VERSION %version_tag% >>beta_date.script
-echo } >>beta_date.script
-echo Done.
-
-echo.
 echo ====================== Compiling...
 echo.
-cd ../
-Scriptpack.exe
+Scriptpack.exe %out_path%
 echo Done.
 
 echo.
