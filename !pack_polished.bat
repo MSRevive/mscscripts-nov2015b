@@ -1,13 +1,9 @@
 @ECHO OFF
 
-set version_tag=NOV2015a
-set out_path=D:\github\mscscripts-nov2015b\scripts
+set out_path=scripts
 
 :loop
 title Packing TEST SC.DLL %date% %time%
-echo REMEMBER TO UPDATE VERSION_TAG IN THIS BATCH FILE
-echo Current Version tag: %version_tag%
-echo.
 pause
 echo.
 echo.
